@@ -5,9 +5,8 @@
 
 #geolocating is right, talk to HP about it
 
-library(plotly)
+library(gridExtra)
 library(data.table)
-library(rgdal)
 library(gdalUtils)
 library(sp)
 library(caTools)
@@ -15,6 +14,7 @@ library(rgdal)
 library(rgeos)
 library(ggplot2)
 library(raster)
+library(zoo)
 
 # import i_angle raster
 i_angle_deg_raw <-raster("/Volumes/JT/projects/uavsar/jemez/inc/i_angle_deg.tif")
@@ -26,7 +26,6 @@ files <-list.files("/Volumes/JT/projects/uavsar/jemez/atm_correct/", pattern = "
 files
 stack_raw <-stack(files)
 stack_raw # inspect
-files
 
 ####### set no data values to NA for all 5 layers, restack
 
@@ -216,6 +215,229 @@ ggsave(p10,
        width = 6, 
        height = 4,
        dpi = 400)
+
+
+######################################################
+#################### transect plots ##################
+######################################################
+
+# read in east west profile for phase
+EW <-read.csv("/Volumes/JT/projects/uavsar/jemez/atm_correct/east-west_transect.csv")
+
+#change 0 phase values to NA
+#unw_EW$unw[unw_EW$unw == 0] <-NA
+unw_10p_mean <-as.data.frame(rollmean(EW$unw, k = 10)) #calc 10 pixel rolling mean
+colnames(unw_10p_mean)[1] <- "rolling_mean10" #change name
+add_na <-as.data.frame(rep(NA, 9)) # add 9 NAs
+colnames(add_na)[1] <- "rolling_mean10"
+unw_10p_mean <-rbind(add_na, unw_10p_mean)
+
+# 20p
+unw_20p_mean <-as.data.frame(rollmean(EW$unw, k = 20)) #calc 10 pixel rolling mean
+colnames(unw_20p_mean)[1] <- "rolling_mean20" #change name
+add_na2 <-as.data.frame(rep(NA, 19)) # add 9 NAs
+colnames(add_na2)[1] <- "rolling_mean20"
+unw_20p_mean <-rbind(add_na2, unw_20p_mean)
+
+
+EW_new <-cbind(EW, unw_10p_mean$rolling_mean10, unw_20p_mean$rolling_mean20)
+colnames(EW_new)[6] <- "rolling_mean10"
+colnames(EW_new)[7] <- "rolling_mean20"
+
+#unw_profile <-new_df %>% arrange(desc(lon_change))
+write.csv(EW_new, "/Volumes/JT/projects/uavsar/jemez/atm_correct/EW_means.csv")
+
+##### plot ew phase data
+
+# use 4 bc phase max and 3500 bc ele max to rescale data
+
+yaht <-ggplot(EW_new, aes(x =lon)) +
+  geom_line(aes(y=unw), size = .1) +
+  geom_line(aes(y=ele * 4 / 3500), color = "darkgreen")+
+  geom_line(aes(y=rolling_mean10), color = "red") + 
+  geom_line(aes(y=rolling_mean20), color = "blue") +
+  labs(title = "Jemez (E-W) Phase and Elevation Profile",
+       x = "Longitude (deg)",
+       y = "Unwrapped Phase (radians)")+
+  scale_y_continuous(
+    name = "Longitude Change (deg)", 
+    sec.axis = sec_axis(~ .* (3500 / 4), name = "Elevation (m)"), limits = c(-2, 4))+
+  theme(axis.line = element_line(colour = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank())
+plot(yaht)
+
+setwd("/Volumes/JT/projects/uavsar/jemez/atm_correct/plots")
+ggsave(yaht,
+  file = "ew_ele_phase_dualaxis.png",
+  width = 6, 
+  height = 4,
+  dpi = 400)
+
+### ew unw
+
+ew_unw_plot <-ggplot(EW_new, aes(x =lon)) +
+  geom_line(aes(y=unw), size = .1) +
+  geom_line(aes(y=rolling_mean10), color = "red") + 
+  geom_line(aes(y=rolling_mean20), color = "blue") +
+  labs(title = "Jemez (E-W) Phase and Elevation Profile",
+       x = "Longitude (deg)",
+       y = "Unwrapped Phase (radians)")+
+  theme(axis.line = element_line(colour = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank())
+plot(ew_unw_plot)
+
+
+# plot ew ele data
+
+ew_ele_plot <-ggplot(EW_new, aes(x =lon)) +
+  geom_line(aes(y=ele), color = "darkgreen") +
+  labs(#title = "Jemez (E-W) Elevation Profile",
+       x = "Longitude (deg)",
+       y = "Elevation (meters)")+
+  theme(axis.line = element_line(colour = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank())
+
+ew_dual_plot <-grid.arrange(ew_unw_plot, ew_ele_plot, ncol=2)
+ggsave(ew_dual_plot,
+       file = "ew_ele_phase_dualplot.png",
+       width = 10, 
+       height = 4,
+       dpi = 400)
+
+ew_dual_plot2 <-grid.arrange(ew_unw_plot, ew_ele_plot, ncol=1)
+ggsave(ew_dual_plot2,
+       file = "ns_ele_phase_dualplot2.png",
+       width = 10, 
+       height = 5,
+       dpi = 400)
+
+
+#################
+## north south
+##################
+
+NS <-read.csv("/Volumes/JT/projects/uavsar/jemez/atm_correct/north-south_transect.csv")
+
+#change 0 phase values to NA
+#unw_EW$unw[unw_EW$unw == 0] <-NA
+unw_10p_mean <-as.data.frame(rollmean(NS$unw, k = 10)) #calc 10 pixel rolling mean
+colnames(unw_10p_mean)[1] <- "rolling_mean10" #change name
+add_na <-as.data.frame(rep(NA, 9)) # add 9 NAs
+colnames(add_na)[1] <- "rolling_mean10"
+unw_10p_mean <-rbind(add_na, unw_10p_mean)
+
+# 20p
+unw_20p_mean <-as.data.frame(rollmean(NS$unw, k = 20)) #calc 10 pixel rolling mean
+colnames(unw_20p_mean)[1] <- "rolling_mean20" #change name
+add_na2 <-as.data.frame(rep(NA, 19)) # add 9 NAs
+colnames(add_na2)[1] <- "rolling_mean20"
+unw_20p_mean <-rbind(add_na2, unw_20p_mean)
+
+
+NS_new <-cbind(NS, unw_10p_mean$rolling_mean10, unw_20p_mean$rolling_mean20)
+colnames(NS_new)[6] <- "rolling_mean10"
+colnames(NS_new)[7] <- "rolling_mean20"
+
+
+
+
+##### plot NS phase data
+
+# use 4 bc phase max and 3500 bc ele max to rescale data
+
+hmmt <-ggplot(NS_new, aes(x =lat)) +
+  geom_line(aes(y=unw), size = .1) +
+  geom_line(aes(y=ele * 4 / 3500), color = "darkgreen")+
+  geom_line(aes(y=rolling_mean10), color = "red") + 
+  geom_line(aes(y=rolling_mean20), color = "blue") +
+  labs(title = "Jemez (N-S) Phase and Elevation Profile",
+       x = "Latitude (deg)",
+       y = "Unwrapped Phase (radians)")+
+  scale_y_continuous(
+    name = "Longitude Change (deg)", 
+    sec.axis = sec_axis(~ .* (3500 / 4), name = "Elevation (m)"), limits = c(-2, 4))+
+  theme(axis.line = element_line(colour = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank())
+plot(hmmt)
+
+hmmt2 <-hmmt+geom_line(aes(x =lon, y=(ele / 10)), color = "darkgreen")
+plot(hmmt)
+
+setwd("/Volumes/JT/projects/uavsar/jemez/atm_correct/")
+ggsave(hmmt,
+       file = "ns_ele_phase_dualaxis.png",
+       width = 6, 
+       height = 4,
+       dpi = 400)
+
+
+# plot ew ele data
+
+ns_ele_plot <-ggplot(NS_new, aes(x =lat)) +
+  geom_line(aes(y=ele), color = "darkgreen") +
+  labs(#title = "Jemez (N-S) Phase and Elevation Profile",
+       x = "Latitude (deg)",
+       y = "Elevation (meters)")+
+  ylim(c(2000,3500))+
+  theme(axis.line = element_line(colour = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank())
+plot(ns_ele_plot)
+
+## unw
+ns_unw_plot <-ggplot(NS_new, aes(x =lat)) +
+  geom_line(aes(y=unw), size = .1) +
+  geom_line(aes(y=rolling_mean10), color = "red") + 
+  geom_line(aes(y=rolling_mean20), color = "blue") +
+  labs(title = "Jemez (N-S) Phase and Elevation Profile",
+       x = "Latitude (deg)",
+       y = "Unwrapped Phase (radians)")+
+  theme(axis.line = element_line(colour = "black"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank())
+plot(ns_unw_plot)
+
+ns_dual_plot <-grid.arrange(ns_unw_plot, ns_ele_plot, ncol=2)
+ggsave(ns_dual_plot,
+       file = "ns_ele_phase_dualplot.png",
+       width = 10, 
+       height = 4,
+       dpi = 400)
+
+ns_dual_plot2 <-grid.arrange(ns_unw_plot, ns_ele_plot, ncol=1)
+ggsave(ns_dual_plot2,
+       file = "ns_ele_phase_dualplot2.png",
+       width = 10, 
+       height = 5,
+       dpi = 400)
+
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
